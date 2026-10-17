@@ -10,7 +10,7 @@ TEAM="${DEVELOPMENT_TEAM:-}"
 BUNDLE_ID="${BUNDLE_ID:-com.DefaultCompany.DragonBoy002}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 OUT="$ROOT/ios-build/out"
-ARCHIVE="$OUT/Ngọc Rồng PAT.xcarchive"
+ARCHIVE="$OUT/TANBINHNGOCRONG.xcarchive"
 EXPORT_DIR="$OUT/ipa"
 
 # Ten goi .app KHONG duoc doan tu ten project: Unity lay tu Player Settings
