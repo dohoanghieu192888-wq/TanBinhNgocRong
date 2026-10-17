@@ -12,7 +12,31 @@ BUILD_NUMBER="${BUILD_NUMBER:-1}"
 OUT="$ROOT/ios-build/out"
 ARCHIVE="$OUT/Ngọc Rồng PAT.xcarchive"
 EXPORT_DIR="$OUT/ipa"
-APP_NAME="Ngọc Rồng PAT"
+
+# Ten goi .app KHONG duoc doan tu ten project: Unity lay tu Player Settings
+# (PRODUCT_NAME_APP) nen co the lech hoa/thuong, co dau tieng Viet hoac khoang trang.
+# Vi du project nay dat PRODUCT_NAME_APP = TANBINHNGOCRONG, trong khi ten cu la
+# "Ngọc Rồng PAT" - chi can khac mot ky tu la check duong dan that bai.
+# Vi vay doc thang WRAPPER_NAME tu Xcode sau khi build.
+resolve_app() {
+  local products="$OUT/DerivedData/Build/Products/$CONFIG-iphoneos"
+  local settings dir name
+  settings="$(xcodebuild -project "$PROJECT" -target Unity-iPhone -configuration "$CONFIG" \
+    -sdk iphoneos -derivedDataPath "$OUT/DerivedData" -showBuildSettings 2>/dev/null || true)"
+  dir="$(printf '%s\n' "$settings" | sed -n 's/^[[:space:]]*TARGET_BUILD_DIR = //p' | head -n 1)"
+  name="$(printf '%s\n' "$settings" | sed -n 's/^[[:space:]]*WRAPPER_NAME = //p' | head -n 1)"
+  if [[ -n "$dir" && -n "$name" && -d "$dir/$name" ]]; then
+    printf '%s\n' "$dir/$name"
+    return 0
+  fi
+  # Du phong: quet thu muc san pham cua DerivedData (khong dung find | head vi
+  # pipefail se lam ham tra ve loi khi thu muc chua ton tai).
+  local candidate
+  for candidate in "$products"/*.app; do
+    [[ -d "$candidate" ]] && { printf '%s\n' "$candidate"; return 0; }
+  done
+  return 0
+}
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "LOI: script nay phai chay tren macOS co Xcode. Windows/Linux khong tao duoc .ipa." >&2
@@ -74,14 +98,24 @@ if [[ "$METHOD" == "unsigned" ]]; then
   xcodebuild "${SETTINGS[@]}" -derivedDataPath "$OUT/DerivedData" \
     "${OVERRIDES[@]}" \
     build
-  APP="$OUT/DerivedData/Build/Products/$CONFIG-iphoneos/$APP_NAME.app"
-  [[ -d "$APP" ]] || { echo "LOI: khong thay $APP sau khi build" >&2; exit 1; }
-  rm -rf "$OUT/Payload" "$OUT/$APP_NAME-unsigned.ipa"
+  APP="$(resolve_app)"
+  if [[ -z "$APP" || ! -d "$APP" ]]; then
+    echo "LOI: khong thay goi .app sau khi build (config $CONFIG)." >&2
+    echo "     Thu muc san pham: $OUT/DerivedData/Build/Products/$CONFIG-iphoneos" >&2
+    echo "     Noi dung hien co:" >&2
+    ls -la "$OUT/DerivedData/Build/Products/$CONFIG-iphoneos" >&2 2>&1 || true
+    echo "     (neu thu muc tren rong, xcodebuild da build nhung khong dat san pham vao DerivedData - kiem tra -scheme/-configuration)" >&2
+    exit 1
+  fi
+  APP_BUNDLE="$(basename "$APP")"
+  APP_STEM="${APP_BUNDLE%.app}"
+  echo "==> San pham: $APP"
+  rm -rf "$OUT/Payload" "$OUT/$APP_STEM-unsigned.ipa"
   mkdir -p "$OUT/Payload"
   cp -R "$APP" "$OUT/Payload/"
-  (cd "$OUT" && zip -qry "$APP_NAME-unsigned.ipa" Payload)
+  (cd "$OUT" && zip -qry "$APP_STEM-unsigned.ipa" Payload)
   rm -rf "$OUT/Payload"
-  echo "==> Xong: $OUT/$APP_NAME-unsigned.ipa"
+  echo "==> Xong: $OUT/$APP_STEM-unsigned.ipa"
   exit 0
 fi
 
